@@ -1,0 +1,63 @@
+name: To-Do App CI-CD Pipeline
+
+# Trigger CI on feature branch pushes and PRs targeting main
+on:
+  push:
+    branches:
+      - 'feature/**'
+
+  pull_request:
+    branches:
+      - main
+
+# Minimum permissions required for CI
+permissions:
+  contents: read
+
+jobs:
+
+  # JOB 1: FRONTEND BUILD
+  frontend-build:
+    name: Frontend CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Install Frontend Dependencies
+        working-directory: frontend
+        run: npm install
+
+      - name: Build React Application
+        working-directory: frontend
+        run: npm run build
+
+  # JOB 2: BACKEND VALIDATION
+  backend-build:
+    name: Backend CI
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '16'
+
+      - name: Install Backend Dependencies
+        working-directory: backend
+        run: npm install
+
+      - name: Build Backend Docker Image
+        run: |
+          docker build \
+            -t todo-backend:${{ github.sha }} \
+            ./backend
