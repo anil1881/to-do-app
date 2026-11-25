@@ -1,22 +1,20 @@
 name: To-Do App CI-CD Pipeline
 
-# Trigger CI on feature branch pushes and PRs targeting main
 on:
   push:
     branches:
       - 'feature/**'
+      - main
 
   pull_request:
     branches:
       - main
 
-# Minimum permissions required for CI
 permissions:
   contents: read
+  id-token: write
 
 jobs:
-
-  # JOB 1: FRONTEND BUILD
   frontend-build:
     name: Frontend CI
     runs-on: ubuntu-latest
@@ -28,17 +26,16 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '20'
 
       - name: Install Frontend Dependencies
         working-directory: frontend
-        run: npm install
+        run: npm ci
 
       - name: Build React Application
         working-directory: frontend
         run: npm run build
 
-  # JOB 2: BACKEND VALIDATION
   backend-build:
     name: Backend CI
     runs-on: ubuntu-latest
@@ -50,14 +47,90 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '16'
+          node-version: '20'
 
       - name: Install Backend Dependencies
         working-directory: backend
-        run: npm install
+        run: npm ci --omit=dev
 
       - name: Build Backend Docker Image
         run: |
           docker build \
             -t todo-backend:${{ github.sha }} \
             ./backend
+
+  deploy:
+    name: Build, Push and Deploy to GKE
+    runs-on: ubuntu-latest
+    needs:
+      - frontend-build
+      - backend-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker authentication
+        run: gcloud auth configure-docker us-east4-docker.pkg.dev --quiet
+
+      - name: Set image tags
+        run: |
+          echo "IMAGE_TAG=${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "FRONTEND_IMAGE=us-east4-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REGISTRY }}/frontend:${GITHUB_SHA}" >> "$GITHUB_ENV"
+          echo "BACKEND_IMAGE=us-east4-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.GCP_ARTIFACT_REGISTRY }}/backend:${GITHUB_SHA}" >> "$GITHUB_ENV"
+
+      - name: Build and push frontend image
+        run: |
+          docker build \
+            -t "$FRONTEND_IMAGE" \
+            ./frontend
+
+          docker push "$FRONTEND_IMAGE"
+
+      - name: Build and push backend image
+        run: |
+          docker build \
+            -t "$BACKEND_IMAGE" \
+            ./backend
+
+          docker push "$BACKEND_IMAGE"
+
+      - name: Connect to GKE cluster
+        run: |
+          gcloud container clusters get-credentials "${{ vars.GKE_CLUSTER }}" \
+            --region "${{ vars.GCP_REGION }}" \
+            --project "${{ vars.GCP_PROJECT_ID }}"
+
+      - name: Create namespace
+        run: kubectl apply -f k8s/namespace.yaml
+
+      - name: Replace image tags in Kubernetes manifests
+        run: |
+          sed -i "s|IMAGE_TAG|${IMAGE_TAG}|g" k8s/backend.yaml k8s/frontend.yaml
+
+      - name: Deploy backend
+        run: kubectl apply -f k8s/backend.yaml
+
+      - name: Deploy frontend
+        run: kubectl apply -f k8s/frontend.yaml
+
+      - name: Wait for backend rollout
+        run: kubectl rollout status deployment/backend --namespace=todo-app --timeout=300s
+
+      - name: Wait for frontend rollout
+        run: kubectl rollout status deployment/frontend --namespace=todo-app --timeout=300s
+
+      - name: Show frontend external IP
+        run: |
+          kubectl get service frontend --namespace=todo-app
+          kubectl get pods --namespace=todo-app
