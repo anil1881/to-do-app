@@ -1,4 +1,3 @@
-
 name: To-Do App Docker Hub GKE CI-CD
 
 on:
@@ -36,7 +35,10 @@ jobs:
 
       - name: Build React Application
         working-directory: frontend
+        env:
+          NODE_OPTIONS: --openssl-legacy-provider
         run: npm run build
+
 
   # JOB 2: BACKEND CI
   backend-ci:

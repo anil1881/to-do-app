@@ -1,20 +1,13 @@
-# Build the React production bundle
 FROM node:20-alpine AS build
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
+COPY package*.json ./
+
 RUN npm ci
 
 COPY . .
+
+ENV NODE_OPTIONS=--openssl-legacy-provider
+
 RUN npm run build
-
-# Serve the static build with Nginx
-FROM nginx:1.27-alpine
-
-COPY --from=build /app/build /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
-
-CMD ["nginx", "-g", "daemon off;"]
