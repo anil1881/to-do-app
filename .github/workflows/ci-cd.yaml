@@ -35,8 +35,6 @@ jobs:
 
       - name: Build React Application
         working-directory: frontend
-        env:
-          NODE_OPTIONS: --openssl-legacy-provider
         run: npm run build
 
 
