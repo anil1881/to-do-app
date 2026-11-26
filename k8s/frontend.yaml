@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: us-east4-docker.pkg.dev/instant-heading-423611-g8/todo-app/frontend:IMAGE_TAG
+          image: vishalpasupuleti/todo-frontend:IMAGE_TAG
           ports:
             - containerPort: 80
           resources:

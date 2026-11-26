@@ -6,7 +6,7 @@ metadata:
   labels:
     app: backend
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: backend
@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: backend
-          image: us-east4-docker.pkg.dev/instant-heading-423611-g8/todo-app/backend:IMAGE_TAG
+          image: vishalpasupuleti/todo-backend:IMAGE_TAG
           ports:
             - containerPort: 4000
           resources:
